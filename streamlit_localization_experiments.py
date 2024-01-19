@@ -1,11 +1,7 @@
 import numpy as np # for most calculations
 import pandas as pd # for working with tabular data
-import matplotlib as mpl # for visualization
 from matplotlib import pyplot as plt # for visualization
 import geopy.distance # for calculating geographic distances
-import pickle # for loading some saved data
-from shapely.geometry import Point, Polygon # for plotting shapes
-import geopandas as gpd
 import streamlit as st
 
 
