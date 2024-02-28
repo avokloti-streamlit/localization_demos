@@ -193,9 +193,12 @@ geometries = {'Triangle': (np.array([1, np.cos(2 * np.pi / 3), np.cos(4 * np.pi 
               'Pentagon with Center': (np.array([0] + [np.cos(angle) for angle in np.arange(0, 2 * np.pi, 2 * np.pi/5)]),
                          np.array([0] + [np.sin(angle) for angle in np.arange(0, 2 * np.pi, 2 * np.pi/5)])),
               'Octagon with Center': (np.array([0] + [np.cos(angle) for angle in np.arange(0, 2 * np.pi, np.pi/4)]),
-                         np.array([0] + [np.sin(angle) for angle in np.arange(0, 2 * np.pi, np.pi/4)]))}
+                         np.array([0] + [np.sin(angle) for angle in np.arange(0, 2 * np.pi, np.pi/4)])),
               #'Square Grid': (np.array([-2.5] * 6 + [-1.5] * 6 + [-0.5] * 6 + [0.5] * 6 + [1.5] * 6 + [2.5] * 6),
               #                np.array([-2.5, -1.5, -0.5, 0.5, 1.5, 2.5] * 6))}
+              'Square Grid': (np.array([-1.5] * 4 + [-0.5] * 4 + [0.5] * 4 + [1.5] * 4),
+                              np.array([-1.5, -0.5, 0.5, 1.5] * 4)),
+              'Line': (np.array([-1.5, -0.5, 0.5, 1.5]), np.zeros((4)))}
 
 # triangular grid: 
 #(np.array([0] + [np.cos(angle) for angle in ]),
@@ -224,8 +227,8 @@ with st.sidebar:
     unit_xs = geometries[array_choice][0]
     unit_ys = geometries[array_choice][1]
 
-    limits_xs = [-2, 2]
-    limits_ys = [-2, 2]
+    limits_xs = [-3, 3]
+    limits_ys = [-3, 3]
 
     grid_resolution = st.number_input('Grid resolution (pixels):', 10, 100, value=60, step=10)
 
@@ -253,7 +256,7 @@ with st.sidebar:
 
 ## ---- user input for detection function ---- ##
 
-max_distance = np.max(distances[0])
+max_distance = float(limits_xs[1])
 
 c0, c1, c2 = st.columns((2, 6, 2))
 function_type = c1.radio('Choose a detection function:', ['Half-normal', 'Hazard-rate'])
@@ -323,7 +326,7 @@ with st.form("Error parameters"):
     medium = c1.radio('Propagation medium:', ['Air (340 m/s)', 'Water (1500 m/s)'])
     temporal_error = c2.number_input('Temporal measurement error:', min_value=0.0, max_value=5.0, value=0.01)
     sd_parameter = c2.number_input('Temporal SD parameter:', min_value=0.0, max_value=5.0, value=0.1)
-    num_repeats = c3.number_input('Monte-Carlo runs:', min_value=0, max_value=100, step=1, value=10)
+    num_repeats = c3.number_input('Monte-Carlo runs:', min_value=0, max_value=100, step=1, value=5)
     submitted = st.form_submit_button("Calculate!")
 
 # next, set a temporal error spatial deviation
