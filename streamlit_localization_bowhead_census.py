@@ -152,6 +152,7 @@ def calculateLocalizationError(localizer, temporal_error, sd_parameter, num_repe
     for i in range(localizer.num_xs):
         for j in range(localizer.num_ys):
             # store RMS error
+            #error_list = []
             error_sum = 0
 
             # repeat calculation ten times
@@ -172,7 +173,7 @@ def calculateLocalizationError(localizer, temporal_error, sd_parameter, num_repe
 
                 # calculate error and add to RMS sum
                 error = (max_locations[0] - localizer.study_xs[i])**2 + (max_locations[1] - localizer.study_ys[j])**2
-                error_sum += error**2
+                error_sum += error
             
             # save
             errors_rms[i, j] = np.sqrt(error_sum/num_repeats)
@@ -182,13 +183,20 @@ def calculateLocalizationError(localizer, temporal_error, sd_parameter, num_repe
     return errors_rms
 
 def plotErrorMap(units_xs, units_ys, errors_rms, localizer, limits_xs, limits_ys):
-    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    fig, ax = plt.subplots(1, 1, figsize=(8, 4))
     pcol = ax.pcolormesh(localizer.study_xs, localizer.study_ys, errors_rms.T, cmap='plasma', linewidth=0, rasterized=True, vmin=0, vmax=0.5)
 
     for j in localizer.units:
         ax.scatter(units_xs[j], units_ys[j], c='w', s=16)
         ax.text(units_xs[j] + 0.0002, units_ys[j] + 0.0002, j, color='w', fontsize=14, weight='bold')
     
+    t = np.linspace(0, np.pi, 200)
+    ax.plot(4 * np.cos(t), 4 * np.sin(t), 'c:')
+    ax.plot(4 * np.cos(t) - 8, 4 * np.sin(t), 'c:')
+    ax.plot(4 * np.cos(t) + 8, 4 * np.sin(t), 'c:')
+    ax.plot(4 * np.cos(t) - 16, 4 * np.sin(t), 'c:')
+    ax.plot(4 * np.cos(t) + 16, 4 * np.sin(t), 'c:')
+    ax.plot(20 * np.cos(t), 20 * np.sin(t), 'c:')
     ax.set_aspect('equal', 'box')
     ax.set_ylim(limits_ys)
     ax.set_xlim(limits_xs)
@@ -344,10 +352,10 @@ with st.form("Error parameters"):
 
 # next, set a temporal error spatial deviation
 if submitted:
-    localizer = Localizer(unit_xs, unit_ys, study_xs, study_ys, speed_of_sound = 1500, source_depths = [0])
+    localizer = Localizer(unit_xs, unit_ys, study_xs, study_ys, speed_of_sound = 1.5, source_depths = [0])
 
     errors_rms = calculateLocalizationError(localizer, temporal_error, sd_parameter, num_repeats)
-    #print(np.min(errors_rms), )
+    print(np.min(errors_rms), np.max(errors_rms))
     fig_error = plotErrorMap(unit_xs, unit_ys, errors_rms, localizer, limits_xs, limits_ys)
 
     c0, c1, c2 = st.columns((2, 6, 2))
