@@ -261,7 +261,7 @@ with st.sidebar:
 
     c1, c2 = st.columns(2)
     grid_resolution = c1.number_input('Grid resolution (pixels):', 10, 100, value=60, step=10)
-    grid_limits = c2.number_input('Grid limits (km):', 10, 50, value=20, step=1)
+    grid_limits = c2.number_input('Grid limits (km):', 10, 50, value=30, step=1)
 
     limits_xs = [-grid_limits, grid_limits ] #[1.5 * np.min(unit_xs) - 2, 1.5 * np.max(unit_xs) + 2]
     limits_ys = [0, grid_limits] #[1.5 * np.min(unit_ys) - 2, 1.5 * np.max(unit_ys) + 2]
