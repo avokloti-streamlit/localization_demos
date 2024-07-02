@@ -12,22 +12,17 @@ st.set_page_config(layout="wide")
 @st.cache_data
 def plotIndividualProbs(hyd_xs, hyd_ys, longitudes, latitudes, toas, limits_xs, limits_ys):
     ## visualize the ToA
-    if (len(hyd_xs) > 5):
-        num_plots, plot_indices = 5, np.random.choice(np.arange(len(hyd_xs)), 5, replace=False)
-    else:
-        num_plots, plot_indices = len(hyd_xs), np.arange(len(hyd_xs))
-    
-    fig, axs = plt.subplots(1, num_plots, figsize=(5 * num_plots, 5))
-    for h1 in range(num_plots):
-        pcol = axs[h1].pcolormesh(longitudes, latitudes, toas[plot_indices[h1]].T, cmap='Blues_r', linewidth=0, rasterized=True, vmin=0, vmax=1)
+    fig, axs = plt.subplots(2, 4, figsize=(16, 8))
+    for h1 in range(8):
+        pcol = axs[h1//4, h1 % 4].pcolormesh(longitudes, latitudes, toas[h1].T, cmap='Blues_r', linewidth=0, rasterized=True, vmin=0, vmax=1)
         
         for h2 in range(len(hyd_xs)):
-            axs[h1].scatter(hyd_xs[h2], hyd_ys[h2], c='k', s=15)
+            axs[h1//4, h1 % 4].scatter(hyd_xs[h2], hyd_ys[h2], c='k', s=15)
             #axs[h1].text(hyd_xs[h2], hyd_ys[h2], h2, color='k', fontsize=15)
         
-        axs[h1].set_aspect('equal', 'box')
-        axs[h1].set_ylim(limits_ys)
-        axs[h1].set_xlim(limits_xs)
+        axs[h1//4, h1 % 4].set_aspect('equal', 'box')
+        axs[h1//4, h1 % 4].set_ylim(limits_ys)
+        axs[h1//4, h1 % 4].set_xlim(limits_xs)
     
     fig.tight_layout()
     return fig
@@ -117,6 +112,7 @@ def detectionProbabilities(probs):
     no_detection = np.ones((num_lon, num_lat))
     detection_at_one_unit = np.zeros((num_lon, num_lat))
     detection_at_two_units = np.zeros((num_lon, num_lat))
+    detection_at_three_units = np.zeros((num_lon, num_lat))
 
     for h1 in range(num_units):
         no_detection = no_detection * (1 - probs[h1])
@@ -131,18 +127,31 @@ def detectionProbabilities(probs):
 
     for h1 in range(num_units):
         for h2 in range(h1+1, num_units):
-            if (h1 != h2):
-                current_product = probs[h1] * probs[h2]
-                for h3 in range(num_units):
-                    if (h3 != h1) and (h3 != h2):
-                        current_product = current_product * (1 - probs[h3])
+            assert (h1 != h2)
+            current_product = probs[h1] * probs[h2]
+            for h3 in range(num_units):
+                if (h3 != h1) and (h3 != h2):
+                    current_product = current_product * (1 - probs[h3])
+            
+            detection_at_two_units = detection_at_two_units + current_product
+    
+    for h1 in range(num_units):
+        for h2 in range(h1+1, num_units):
+            for h3 in range(h2+1, num_units):
+                assert (h3 != h1) and (h3 != h2) and (h1 != h2)
+
+                current_product = probs[h1] * probs[h2] * probs[h3]
+                for h4 in range(num_units):
+                    if (h4 != h1) and (h4 != h2) and (h4 != h3):
+                        current_product = current_product * (1 - probs[h4])
             
                 #print('Final maximum for units %d and %d: %.2f' % (h1, h2, np.max(current_product)))
-                detection_at_two_units = detection_at_two_units + current_product
+                detection_at_three_units = detection_at_three_units + current_product
     
     detection_at_three_or_more_units = np.ones((num_lon, num_lat)) - no_detection - detection_at_one_unit - detection_at_two_units
+    detection_at_four_or_more_units = np.ones((num_lon, num_lat)) - no_detection - detection_at_one_unit - detection_at_two_units - detection_at_three_units
 
-    return no_detection, detection_at_one_unit, detection_at_two_units, detection_at_three_or_more_units
+    return no_detection, detection_at_one_unit, detection_at_two_units, detection_at_three_units, detection_at_three_or_more_units, detection_at_four_or_more_units
 
 
 def calculateLocalizationError(localizer, temporal_error, sd_parameter, num_repeats=10):
@@ -221,16 +230,14 @@ def halfNormal(x, sd):
 
 st.header('Probability of Detection Visualization:')
 
-z = 4
-
-geometries = {'Horizontal Square Grid': lambda d: (np.array([-3/2 * d, -d/2, d/2, 3/2 * d, -3/2 * d, -d/2, d/2, 3/2 * d]), np.array([z, z, z, z, z + d, z + d, z + d, z + d])),
-              'Horizontal Triangular Grid': lambda d: (np.array([-d, 0, d, -d/2, d/2, -d, 0, d]), np.array([z, z, z, z + np.sqrt(3)/2 * d, z + np.sqrt(3)/2 * d, z + np.sqrt(3) * d, z + np.sqrt(3) * d, z + np.sqrt(3) * d])),
-              'Vertical Square Grid': lambda d: (np.array([-d/2, -d/2, -d/2, -d/2, d/2, d/2, d/2, d/2]), np.array([z, z + d, z + 2 * d, z + 3 * d, z, z + d, z + 2 * d, z + 3 * d])),
-              'Vertical Triangular Grid': lambda d: (np.array([-d, -d, -d, d, d, d, 0, 0]), np.array([z, z + d, z + 2 * d, z, z + d, z + 2 * d, z + d/2, z + d * 3/2])),
-              'Banner': lambda d: (np.array([-(1 + np.sqrt(3)/2) * d, -d, -d, 0, 0, d, d, (1 + np.sqrt(3)/2) * d]), np.array([z + d/2, z, d + z, z, d + z, z, d + z, z + d/2])),
-              'Line': lambda d: (np.array([-7/2 * d, -5/2 * d, -3/2 * d, -d/2, d/2, d * 3/2, d * 5/2, d * 7/2]), 4 * np.ones(8)),
-              'Two Squares': lambda d: (np.array([-2 * d, -2 * d, -d, -d, d, d, 2 * d, 2 * d]), np.array([z, z + d, z, z + d, z, z + d, z, z + d])),
-              'House': lambda d: (np.array([-d, -d, 0, 0, d, d, -d/2, d/2]), np.array([z, d + z, z, d + z, z, d + z, z + 2 * d, z + 2 * d]))
+geometries = {'Horizontal Square Grid': lambda d, z: (np.array([-3/2 * d, -d/2, d/2, 3/2 * d, -3/2 * d, -d/2, d/2, 3/2 * d]), np.array([z, z, z, z, z + d, z + d, z + d, z + d])),
+              'Horizontal Triangular Grid': lambda d, z: (np.array([-d, 0, d, -d/2, d/2, -d, 0, d]), np.array([z, z, z, z + np.sqrt(3)/2 * d, z + np.sqrt(3)/2 * d, z + np.sqrt(3) * d, z + np.sqrt(3) * d, z + np.sqrt(3) * d])),
+              'Vertical Square Grid': lambda d, z: (np.array([-d/2, -d/2, -d/2, -d/2, d/2, d/2, d/2, d/2]), np.array([z, z + d, z + 2 * d, z + 3 * d, z, z + d, z + 2 * d, z + 3 * d])),
+              'Vertical Triangular Grid': lambda d, z: (np.array([-d, -d, -d, d, d, d, 0, 0]), np.array([z, z + d, z + 2 * d, z, z + d, z + 2 * d, z + d/2, z + d * 3/2])),
+              'Banner': lambda d, z: (np.array([-(1 + np.sqrt(3)/2) * d, -d, -d, 0, 0, d, d, (1 + np.sqrt(3)/2) * d]), np.array([z + d/2, z, d + z, z, d + z, z, d + z, z + d/2])),
+              'Line': lambda d, z: (np.array([-7/2 * d, -5/2 * d, -3/2 * d, -d/2, d/2, d * 3/2, d * 5/2, d * 7/2]), 4 * np.ones(8)),
+              'Two Squares': lambda d, z: (np.array([-2 * d, -2 * d, -d, -d, d, d, 2 * d, 2 * d]), np.array([z, z + d, z, z + d, z, z + d, z, z + d])),
+              'House': lambda d, z: (np.array([-d, -d, 0, 0, d, d, -d/2, d/2]), np.array([z, d + z, z, d + z, z, d + z, z + 2 * d, z + 2 * d]))
               #'Plus-sign': lambda d: (np.array([0, 0, 0, 0, 2 * d, d, -d, -2 * d]), np.array([5 * d, 4 * d, 2 * d, d, 3 * d, 3 * d, 3 * d, 3 * d]))
               #'Triangular Grid': lambda d: (np.array([]), np.array([])),
               }
@@ -243,6 +250,10 @@ with st.sidebar:
     # first, choose and plot detection function
     st.subheader('Detection Function Parameters')
 
+    st.markdown('The detection functions below are estimated by reference to *"The influence of sea ice on the detection of bowhead whale calls"* by Jones, Joshua M., et al, published in Scientific Reports (2022).')
+
+    st.markdown('Please use the slider below to set the **standard deviation** of the half-normal detection function indicated by the black curve.')
+
     t = np.linspace(0, 40.0, 1000)
     sd_parameter = st.slider('SD:', value=10.0, min_value=0.0, max_value = 60.0, step=0.5, format="%.1f")
     det_function = lambda x: halfNormal(x, sd_parameter)
@@ -254,10 +265,11 @@ with st.sidebar:
     st.subheader('Array Parameters')
 
     array_choice = st.radio('Choose an array geometry:', list(geometries.keys()))
-    array_spacing = st.slider('Array Spacing:', value=5.0, min_value=0.0, max_value = 12.0, step=0.5, format="%.1f")
+    array_spacing = st.slider('Array Spacing:', value=5.0, min_value=0.0, max_value = 10.0, step=0.5, format="%.1f")
+    array_offset = st.slider('Offset from Perch:', value=4.0, min_value=0.0, max_value = 10.0, step=0.5, format="%.1f")
 
-    unit_xs = geometries[array_choice](array_spacing)[0]
-    unit_ys = geometries[array_choice](array_spacing)[1]
+    unit_xs = geometries[array_choice](array_spacing, array_offset)[0]
+    unit_ys = geometries[array_choice](array_spacing, array_offset)[1]
 
     c1, c2 = st.columns(2)
     grid_resolution = c1.number_input('Grid resolution (pixels):', 10, 100, value=60, step=10)
@@ -316,13 +328,19 @@ with st.sidebar:
 probs = calculateProbs(det_function, distances)
 
 # calculate all detection probabilities
-no_detection, detection_at_one_unit, detection_at_two_units, detection_at_three_or_more_units = detectionProbabilities(probs)
+no_detection, detection_at_one_unit, detection_at_two_units, detection_at_three_units, detection_at_three_or_more_units, detection_at_four_or_more_units = detectionProbabilities(probs)
 
-st.text('Probability that a call is detected at three or more units:')
+st.markdown('Probability that a call is detected at three or more units:')
 fig_det_at_three_plus_units = plotProbabilityLandscape(unit_xs, unit_ys, detection_at_three_or_more_units, study_xs, study_ys, limits_xs, limits_ys)
 
-c0, c1, c2 = st.columns((2, 6, 2))
+c0, c1, c2 = st.columns((1, 6, 1))
 c1.pyplot(fig_det_at_three_plus_units)
+
+st.markdown('Probability that a call is detected at four or more units:')
+fig_det_at_four_plus_units = plotProbabilityLandscape(unit_xs, unit_ys, detection_at_four_or_more_units, study_xs, study_ys, limits_xs, limits_ys)
+
+c0, c1, c2 = st.columns((1, 6, 1))
+c1.pyplot(fig_det_at_four_plus_units)
 
 # calculate time-difference-of-arrival for each hydrophone pair
 with st.expander('Probability of detection for each unit individually:'):
@@ -331,18 +349,23 @@ with st.expander('Probability of detection for each unit individually:'):
 
 with st.expander('Probability that a call is not detected at any units:'):
     fig_no_detection = plotProbabilityLandscape(unit_xs, unit_ys, no_detection, study_xs, study_ys, limits_xs, limits_ys)
-    c0, c1, c2 = st.columns((2, 6, 2))
+    c0, c1, c2 = st.columns((1, 6, 1))
     c1.pyplot(fig_no_detection)
 
 with st.expander('Probability that a call is detected at exactly one unit:'):
     fig_det_at_one_unit = plotProbabilityLandscape(unit_xs, unit_ys, detection_at_one_unit, study_xs, study_ys, limits_xs, limits_ys)
-    c0, c1, c2 = st.columns((2, 6, 2))
+    c0, c1, c2 = st.columns((1, 6, 1))
     c1.pyplot(fig_det_at_one_unit)
 
 with st.expander('Probability that a call is detected at exactly two units:'):
     fig_det_at_two_units = plotProbabilityLandscape(unit_xs, unit_ys, detection_at_two_units, study_xs, study_ys, limits_xs, limits_ys)
-    c0, c1, c2 = st.columns((2, 6, 2))
+    c0, c1, c2 = st.columns((1, 6, 1))
     c1.pyplot(fig_det_at_two_units)
+
+with st.expander('Probability that a call is detected at exactly three units:'):
+    fig_det_at_three_units = plotProbabilityLandscape(unit_xs, unit_ys, detection_at_three_units, study_xs, study_ys, limits_xs, limits_ys)
+    c0, c1, c2 = st.columns((1, 6, 1))
+    c1.pyplot(fig_det_at_three_units)
 
 ## ---- map ---- ##
 
@@ -409,6 +432,10 @@ def drawMap(bathymetry, lons, lats, coast, perch_locations_metric, x_array, y_ar
 
 st.header('Map Visualization:')
 
+st.markdown('This map shows the prospective array overlaid on the [bathymetry](https://arcticdata.io/catalog/view/doi:10.5065/D6QZ2822) \
+            of Point Barrow. The orange stars show prior perch locations with the mean location represented by the large red star, and \
+            the bright cyan curve indicates the 75m isoline. Please use the sliders below to modify the **central position** of the array \
+            (corresponding to [0, 0] in the figure above) and a **rotation angle** (relative to horizontal).')
 
 # prepare map information
 bathymetry, lons, lats, coast, perch_locations_metric = loadMapData()
