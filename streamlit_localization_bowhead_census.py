@@ -375,7 +375,7 @@ def loadMapData():
     lons = np.linspace(xllcorner, xllcorner + cellsize * (ncols - 1), ncols//3)/1000
     lats = np.linspace(yllcorner, yllcorner + cellsize * (nrows - 1), nrows//3)/1000
 
-    coast = gpd.read_file('data/individual_files_bb1_coast.shp')
+    coast = gpd.read_file('individual_files_bb1_coast.shp')
     crs_in_km = '+proj=utm +zone=4 +datum=WGS84 +units=km +no_defs +type=crs'
     coast = coast.to_crs(crs_in_km)
 
