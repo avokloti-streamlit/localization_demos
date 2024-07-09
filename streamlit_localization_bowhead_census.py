@@ -407,10 +407,14 @@ def loadMapData():
     perch_locations_gpd = gpd.points_from_xy(perch_locations['Lon'], perch_locations['Lat'], crs="EPSG:4326")
     perch_locations_metric = perch_locations_gpd.to_crs(coast.crs)
 
-    return bathymetry, lons, lats, coast, perch_locations_metric
+    special_locations_gpd = gpd.points_from_xy([-156.676948, -156.789912], [71.32723, 71.290350], crs="EPSG:4326")
+    special_locations_metric = special_locations_gpd.to_crs(coast.crs)
+    special_locations_names = ['NARL', 'Utqiagvik']
+
+    return bathymetry, lons, lats, coast, perch_locations_metric, special_locations_metric, special_locations_names
 
 
-def drawMap(bathymetry, lons, lats, coast, perch_locations_metric, x_array, y_array):
+def drawMap(bathymetry, lons, lats, coast, perch_locations_metric, special_locations_metric, special_locations_names, x_array, y_array):
     fig, ax = plt.subplots(1, 1, figsize=(10, 7))
     contours = plt.contourf(lons, lats, np.flipud(bathymetry), levels = np.arange(-140, 9, 10), cmap='Blues', zorder=2)
     plt.contour(lons, lats, np.flipud(bathymetry), levels = [-75], cmap='cool', zorder=3)
@@ -421,6 +425,10 @@ def drawMap(bathymetry, lons, lats, coast, perch_locations_metric, x_array, y_ar
 
     for i, point in enumerate(perch_locations_metric):
         plt.scatter(point.x, point.y, s=20, color='orange', marker='*', zorder=10)
+    
+    for i, point in enumerate(special_locations_metric):
+        plt.scatter(point.x, point.y, s=20, color='b', marker='D', zorder=10)
+        plt.text(point.x, point.y - 1.2, special_locations_names[i], color='b', fontsize=9, zorder=10)
 
     for i in np.arange(8):
         plt.scatter(x_array, y_array, s=15, c='k', zorder=10)
@@ -438,7 +446,7 @@ st.markdown('This map shows the prospective array overlaid on the [bathymetry](h
             (corresponding to [0, 0] in the figure above) and a **rotation angle** (relative to horizontal).')
 
 # prepare map information
-bathymetry, lons, lats, coast, perch_locations_metric = loadMapData()
+bathymetry, lons, lats, coast, perch_locations_metric, special_locations_metric, special_locations_names = loadMapData()
 
 # mean longitude/latitude
 x_mean = np.mean([point.x for point in perch_locations_metric])
@@ -454,7 +462,7 @@ rotation = c3.number_input('Rotation (degrees):', min_value=-90, max_value=90, s
 x_array, y_array = rotateArray(unit_xs, unit_ys, rotation, x_center, y_center)
 
 # plot map
-fig_map = drawMap(bathymetry, lons, lats, coast, perch_locations_metric, x_array, y_array)
+fig_map = drawMap(bathymetry, lons, lats, coast, perch_locations_metric, special_locations_metric, special_locations_names, x_array, y_array)
 st.pyplot(fig_map)
 
 
