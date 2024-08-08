@@ -154,9 +154,57 @@ def detectionProbabilities(probs):
     return no_detection, detection_at_one_unit, detection_at_two_units, detection_at_three_units, detection_at_three_or_more_units, detection_at_four_or_more_units
 
 
-def calculateLocalizationError(localizer, temporal_error, sd_parameter, num_repeats=10):
+# def calculateLocalizationError(localizer, temporal_error, sd_parameter, num_repeats=10):
+#     # save errors here
+#     errors_rms = np.zeros((localizer.num_xs, localizer.num_ys))
+#     error_progress = st.progress(0, 'Calculating Monte-Carlo simulation...')
+
+#     # just use whichever depth
+#     depth = 0
+
+#     for i in range(localizer.num_xs):
+#         for j in range(localizer.num_ys):
+#             # store RMS error
+#             #error_list = []
+#             error_sum = 0
+
+#             # repeat calculation ten times
+#             for r in range(num_repeats):
+#                 # first, get the exact measured times
+#                 random_start_time = np.random.rand() * 10
+#                 measured_times = {unit: localizer.toas_over_depth[depth][unit][i, j] + random_start_time + np.random.normal(scale = temporal_error)
+#                                 for unit in localizer.units}
+
+#                 # calculate pairwise time differences
+#                 measured_tdoas = {}
+#                 for ri in measured_times:
+#                     for rj in measured_times:
+#                         measured_tdoas[(ri, rj)] = (measured_times[ri] - measured_times[rj])
+
+#                 # localize
+#                 _, _, max_locations, depth = localizer.localizeAcrossDepths(measured_tdoas, sd_param = sd_parameter)
+
+#                 # calculate error and add to RMS sum
+#                 error = (max_locations[0] - localizer.study_xs[i])**2 + (max_locations[1] - localizer.study_ys[j])**2
+#                 error_sum += error
+            
+#             # save
+#             errors_rms[i, j] = np.sqrt(error_sum/num_repeats)
+#             error_progress.progress((i * localizer.num_ys + j)/(localizer.num_xs * localizer.num_ys), 'Calculating Monte-Carlo simulation...')
+    
+#     error_progress.empty()
+#     return errors_rms
+
+def calculateLocalizationErrorWithProbability(localizer, det_function, temporal_error, temporal_sd, num_repeats=10, likelihood_threshold=0.01, minimum_number_of_units=3):
     # save errors here
     errors_rms = np.zeros((localizer.num_xs, localizer.num_ys))
+    errors_rms[:] = np.nan
+    success_counts = np.zeros((localizer.num_xs, localizer.num_ys))
+    nonsuccess_counts = np.zeros((localizer.num_xs, localizer.num_ys))
+    unit_counts = np.zeros((localizer.num_xs, localizer.num_ys))
+    stats_metric = np.zeros((localizer.num_xs, localizer.num_ys))
+
+    # calculating localization...
     error_progress = st.progress(0, 'Calculating Monte-Carlo simulation...')
 
     # just use whichever depth
@@ -165,15 +213,36 @@ def calculateLocalizationError(localizer, temporal_error, sd_parameter, num_repe
     for i in range(localizer.num_xs):
         for j in range(localizer.num_ys):
             # store RMS error
-            #error_list = []
             error_sum = 0
+            unit_counter = 0
 
             # repeat calculation ten times
             for r in range(num_repeats):
+                # calculate probability of detection
+                included_units = []
+                for unit in localizer.units:
+                    # calculate distance to unit from grid location, and get probability
+                    distance_to_unit = localizer.speed_of_sound * localizer.toas_over_depth[depth][unit][i, j]
+                    prob = det_function(distance_to_unit)
+                    print(prob)
+
+                    # sample with this probability
+                    include = np.random.binomial(1, prob)
+
+                    if include:
+                        included_units.append(unit)
+                
+                unit_counter += len(included_units)
+
+                # if the signal is detected on fewer than 3 units, continue
+                if len(included_units) < minimum_number_of_units:
+                    nonsuccess_counts[i, j] += 1
+                    continue
+
                 # first, get the exact measured times
                 random_start_time = np.random.rand() * 10
-                measured_times = {unit: localizer.toas_over_depth[depth][unit][i, j] + random_start_time + np.random.normal(scale = temporal_error)
-                                for unit in localizer.units}
+                measured_times = {unit: localizer.toas_over_depth[depth][unit][i, j] + random_start_time + 
+                                  np.random.normal(scale = temporal_error) for unit in included_units}
 
                 # calculate pairwise time differences
                 measured_tdoas = {}
@@ -182,26 +251,38 @@ def calculateLocalizationError(localizer, temporal_error, sd_parameter, num_repe
                         measured_tdoas[(ri, rj)] = (measured_times[ri] - measured_times[rj])
 
                 # localize
-                _, _, max_locations, depth = localizer.localizeAcrossDepths(measured_tdoas, sd_param = sd_parameter)
+                _, likelihood_product, max_locations, depth = localizer.localizeAcrossDepths(measured_tdoas, sd_param = temporal_sd)
+
+                #print(len(included_units), np.max(likelihood_product))
+                
+                # if the location is above threshold, or on the edge of the grid
+                if (np.max(likelihood_product) < likelihood_threshold) or (max_locations[0] in limits_xs) or (max_locations[1] in limits_ys):
+                    nonsuccess_counts[i, j] += 1
+                    continue
 
                 # calculate error and add to RMS sum
                 error = (max_locations[0] - localizer.study_xs[i])**2 + (max_locations[1] - localizer.study_ys[j])**2
+                #print((localizer.study_xs[i], localizer.study_ys[j]), max_locations, error)
+
                 error_sum += error
+                success_counts[i, j] += 1
+                stats_metric[i, j] += (localizer.study_ys[j] < 4) == (max_locations[1] < 4)
             
             # save
-            errors_rms[i, j] = np.sqrt(error_sum/num_repeats)
+            errors_rms[i, j] = np.sqrt(error_sum/success_counts[i, j])
+            unit_counts[i, j] = unit_counter
             error_progress.progress((i * localizer.num_ys + j)/(localizer.num_xs * localizer.num_ys), 'Calculating Monte-Carlo simulation...')
     
     error_progress.empty()
-    return errors_rms
+    return errors_rms, unit_counts/num_repeats, success_counts/num_repeats, nonsuccess_counts/num_repeats, stats_metric/num_repeats
 
-def plotErrorMap(units_xs, units_ys, errors_rms, localizer, limits_xs, limits_ys):
+def plotErrorMap(units_xs, units_ys, errors_rms, localizer, limits_xs, limits_ys, vmax, title=None):
     fig, ax = plt.subplots(1, 1, figsize=(8, 4))
-    pcol = ax.pcolormesh(localizer.study_xs, localizer.study_ys, errors_rms.T, cmap='plasma', linewidth=0, rasterized=True, vmin=0, vmax=0.5)
+    pcol = ax.pcolormesh(localizer.study_xs, localizer.study_ys, errors_rms.T, cmap='plasma', linewidth=0, rasterized=True, vmin=0, vmax=vmax)
 
     for j in localizer.units:
-        ax.scatter(units_xs[j], units_ys[j], c='w', s=16)
-        ax.text(units_xs[j] + 0.0002, units_ys[j] + 0.0002, j, color='w', fontsize=14, weight='bold')
+        ax.scatter(units_xs[j], units_ys[j], c='k', s=16)
+        ax.text(units_xs[j] + 0.0002, units_ys[j] + 0.0002, j, color='k', fontsize=14, weight='bold')
     
     t = np.linspace(0, np.pi, 200)
     ax.plot(4 * np.cos(t), 4 * np.sin(t), 'c:')
@@ -213,6 +294,7 @@ def plotErrorMap(units_xs, units_ys, errors_rms, localizer, limits_xs, limits_ys
     ax.set_aspect('equal', 'box')
     ax.set_ylim(limits_ys)
     ax.set_xlim(limits_xs)
+    ax.set_title(title)
     fig.tight_layout()
     fig.colorbar(pcol)
     return fig
@@ -489,22 +571,64 @@ st.dataframe(array)
 
 ## ---- spatial error ---- ##
 
-# st.header('Visualizing spatial error across an array:')
+st.header('Evaluating Localization Performance:')
 
-# with st.form("Error parameters"):
-#     c1, c2, c3 = st.columns(3)
-#     temporal_error = c1.number_input('Temporal measurement error:', min_value=0.0, max_value=5.0, value=0.01)
-#     sd_parameter = c2.number_input('Temporal SD parameter:', min_value=0.0, max_value=5.0, value=0.1)
-#     num_repeats = c3.number_input('Monte-Carlo runs:', min_value=0, max_value=100, step=1, value=5)
-#     submitted = st.form_submit_button("Calculate!")
+st.markdown('We apply the likelihood-surface localization algorithm, as described in [*Methods for tracking multiple marine mammals \
+            with wide-baseline passive acoustic arrays* (Nosal 2013)](https://pubs.aip.org/asa/jasa/article-abstract/134/3/2383/811358/Methods-for-tracking-multiple-marine-mammals-with).\
+            This is a computational time-difference-of-arrival-based algorithm which relies on intersecting smoothed hyperbolic surfaces, \
+            and can be flexibly adapted for any array geometry and for nonlinear propagation models. The **temporal measurement error** value \
+            below represents the anticipated standard deviation of the actual temporal error present in the data. The **temporal SD parameter** \
+            is an algorithmic parameter representing the degree of smoothness (and uncertainty) in the hyperbolic surfaces. Next, the \
+            **Monte-Carlo runs** value is the number of repeated samples run per each grid point for subsequent calculations. Lastly, the\
+            **minimum units for localizing** parameter determines whether detection at 3 units would be used for localization; increasing\
+            this parameter to 4 can be expected to increase localization accuracy and decrease spatial coverage.' )
 
-# # next, set a temporal error spatial deviation
-# if submitted:
-#     localizer = Localizer(unit_xs, unit_ys, study_xs, study_ys, speed_of_sound = 1.5, source_depths = [0])
+with st.form("Error parameters"):
+    c1, c2, c3, c4 = st.columns(4)
+    temporal_error = c1.number_input('Temporal measurement error:', min_value=0.0, max_value=5.0, value=0.01)
+    temporal_sd = c2.number_input('Temporal SD parameter:', min_value=0.0, max_value=5.0, value=0.1)
+    num_repeats = c3.number_input('Monte-Carlo runs:', min_value=0, max_value=20, step=1, value=5)
+    min_units = c4.radio('Minimum units for localizing:', [3, 4])
+    submitted = st.form_submit_button("Calculate!")
 
-#     errors_rms = calculateLocalizationError(localizer, temporal_error, sd_parameter, num_repeats)
-#     print(np.min(errors_rms), np.max(errors_rms))
-#     fig_error = plotErrorMap(unit_xs, unit_ys, errors_rms, localizer, limits_xs, limits_ys)
+# next, set a temporal error spatial deviation
+if submitted:
+    localizer = Localizer(unit_xs, unit_ys, study_xs, study_ys, speed_of_sound = 1.5, source_depths = [0])
+    errors_rms, unit_counts, success_counts, nonsuccess_counts, stats_metric = calculateLocalizationErrorWithProbability(localizer,
+                                                                                                           det_function,
+                                                                                                           temporal_error,
+                                                                                                           temporal_sd,
+                                                                                                           num_repeats,
+                                                                                                           minimum_number_of_units=min_units)
 
-#     c0, c1, c2 = st.columns((2, 6, 2))
-#     c1.pyplot(fig_error)
+    fig_rms = plotErrorMap(unit_xs, unit_ys, errors_rms, localizer, limits_xs, limits_ys, vmax=2, title='Root-Mean-Square Localization Error (km)')
+    c0, c1, c2 = st.columns((1, 6, 1))
+    c1.pyplot(fig_rms)
+
+    fig_successes = plotErrorMap(unit_xs, unit_ys, success_counts, localizer, limits_xs, limits_ys, vmax=1, title='Proportion of Feasible Localizations')
+    c0, c1, c2 = st.columns((1, 6, 1))
+    c1.pyplot(fig_successes)
+
+    fig_units = plotErrorMap(unit_xs, unit_ys, unit_counts, localizer, limits_xs, limits_ys, vmax=8, title='Mean Number of Units Detecting Vocalization')
+    c0, c1, c2 = st.columns((1, 6, 1))
+    c1.pyplot(fig_units)
+
+    fig_weights = plotErrorMap(unit_xs, unit_ys, stats_metric/success_counts, localizer, limits_xs, limits_ys, vmax=1, title='Of the localizations, what proportion correctly identifies if y < or > 4km?')
+    c0, c1, c2 = st.columns((1, 6, 1))
+    c1.pyplot(fig_weights)
+
+
+# the estimator that Geof wants...
+
+# for each location in the strip of -4 < x < 4
+# if the location is outside of 4km: what proportion of the Monte-Carloed localization estimates result in distances >4km? multiply this by the number of estimates used to compute it
+# if the location is inside of 4km: what proportion of the Monte-Carloed localization estimates result in distances <4km? multiply this by the number of estimates used to compute it
+# no location: 0's
+# make a histogram of these values
+
+
+# Hi Geof! I implemented a modified computational version of your weights metric. For the localization metrics, I repeatedly sample temporal error and then run TDoA localization.
+# If localization does not give a feasible result, it is recorded as w=0. If localization incorrectly identifies d<4km or d>4km, it is also recorded as w=0. And if localization
+# correctly identifies d<4km or d>4km, it is recorded as w=1.
+# I then calculate the mean weight for each grid cell, plot these values over space, and include a histogram of these values. That way, you can see the regions of uncertainty.
+# Does this sound right to you, and address your description? If I understand correctly, I think this should be the empirical version of the weights (scaled up by 2)?
