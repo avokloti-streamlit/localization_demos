@@ -8,6 +8,7 @@ from scipy.interpolate import interpn
 
 st.set_page_config(layout="wide")
 
+## ======================================================================================================================== ##
 
 @st.cache_data
 def plotIndividualProbs(hyd_xs, hyd_ys, longitudes, latitudes, toas, limits_xs, limits_ys):
@@ -32,13 +33,10 @@ def plotProbabilityLandscape(unit_xs, unit_ys, probs, study_xs, study_ys, limits
     fig, axs = plt.subplots(1, 1, figsize=(8, 4))
     if probs is not None:
         pcol = axs.pcolormesh(study_xs, study_ys, probs.T, cmap='magma', linewidth=0, rasterized=True, vmin=0, vmax=1)
-
-    #for h2 in range(7):
-    axs.scatter(unit_xs[0:7], unit_ys[0:7], c='k', s=15)
     
-    #for h2 in range(7, len(unit_xs)):
+    axs.scatter(unit_xs[0:7], unit_ys[0:7], c='k', s=15)
+    axs.scatter(0, 0, s=60, color='red', marker='*', zorder=8)
     axs.scatter(unit_xs[7:], unit_ys[7:], c='k', marker='x', s=17)
-        #axs.text(unit_xs[h2], unit_ys[h2], h2 + 1, color='k', fontsize=15)
 
     # draw circles
     t = np.linspace(0, np.pi, 200)
@@ -108,7 +106,6 @@ def precalculate(unit_xs, unit_ys, study_xs, study_ys):
                 
     return positions, distances
 
-
 @st.cache_data
 def detectionProbabilities(probs):
     num_units = len(probs)
@@ -157,7 +154,6 @@ def detectionProbabilities(probs):
     detection_at_four_or_more_units = np.ones((num_lon, num_lat)) - no_detection - detection_at_one_unit - detection_at_two_units - detection_at_three_units
 
     return no_detection, detection_at_one_unit, detection_at_two_units, detection_at_three_units, detection_at_three_or_more_units, detection_at_four_or_more_units
-
 
 def calculateLocalizationErrorWithProbability(localizer, det_function, temporal_error, temporal_sd, num_repeats=10, likelihood_threshold=0.01, minimum_number_of_units=3):
     # save errors here
@@ -266,202 +262,6 @@ def plotErrorMap(units_xs, units_ys, errors_rms, localizer, limits_xs, limits_ys
 def halfNormal(x, sd):
     return (np.exp(-x**(2) / (2 * sd**2)))
 
-
-## ---- NOTES ---- ##
-
-# need cases with and without ice -- different detection functions
-
-
-
-## ---- define all coordinates / parameters ---- ##
-
-
-
-empirical_sds = {'Ice-cover': {60: 17, 70: 12, 80: 4.5},
-                 'Open-water': {60: 90, 70: 54, 80: 28}}
-
-
-with st.sidebar:
-    # first, choose and plot detection function
-    st.subheader('Detection Function Parameters')
-
-    st.markdown('The detection functions below are estimated by reference to *"The influence of sea ice on the detection of bowhead whale calls"* by Jones, Joshua M., et al, published in Scientific Reports (2022).')
-
-    st.markdown('Please use the slider below to set the **standard deviation** of the half-normal detection function indicated by the black curve.')
-
-    t = np.linspace(0, 40.0, 1000)
-    sd_parameter = st.slider('SD:', value=10.0, min_value=0.0, max_value = 60.0, step=0.5, format="%.1f")
-    det_function = lambda x: halfNormal(x, sd_parameter)
-
-    fig_det_function = plotDetFunction(t, det_function, empirical_sds)
-    st.pyplot(fig_det_function)
-    
-    # next, choose array spacing and geometry
-    #st.subheader('Array Parameters')
-
-    array_choice = 'Current Configuration'
-    array_spacing = 6.5 #st.slider('Array Spacing:', value=6.5, min_value=0.0, max_value = 10.0, step=0.5, format="%.1f")
-    array_offset = 4.0 #st.slider('Offset from Perch:', value=4.0, min_value=0.0, max_value = 10.0, step=0.5, format="%.1f")
-
-    geometries = {'Current Configuration': lambda d, z: (np.array([-(1 + np.sqrt(3)/2) * d, -d, -d, 0, d, d, (1 + np.sqrt(3)/2) * d]), np.array([z + d/2, z, d + z, z, z, d + z, z + d/2]))}
-    unit_xs = geometries[array_choice](array_spacing, array_offset)[0]
-    unit_ys = geometries[array_choice](array_spacing, array_offset)[1]
-
-    #c1, c2 = st.columns(2)
-    grid_resolution = 60 #c1.number_input('Grid resolution (pixels):', 10, 100, value=60, step=10)
-    grid_limits = 30 #c2.number_input('Grid limits (km):', 10, 50, value=30, step=1)
-
-    limits_xs = [-grid_limits, grid_limits ] #[1.5 * np.min(unit_xs) - 2, 1.5 * np.max(unit_xs) + 2]
-    limits_ys = [0, grid_limits] #[1.5 * np.min(unit_ys) - 2, 1.5 * np.max(unit_ys) + 2]
-    study_xs = np.linspace(limits_xs[0], limits_xs[1], grid_resolution)
-    study_ys = np.linspace(limits_ys[0], limits_ys[1], grid_resolution)
-
-    # st.text('Sample array geometry:')
-    # fig_array = plotProbabilityLandscape(unit_xs, unit_ys, np.ones((len(study_xs), len(study_ys))), study_xs, study_ys, limits_xs, limits_ys)
-    # st.pyplot(fig_array)
-    #st.dataframe(positions)
-
-
-## ---- define all coordinates / parameters ---- ##
-
-# st.text('Sample array geometry:')
-# fig_array = plotProbabilityLandscape(unit_xs, unit_ys, np.ones((len(study_xs), len(study_ys))), study_xs, study_ys, limits_xs, limits_ys)
-
-# # make two columns
-# c0, c1, c2 = st.columns((3, 4, 3))
-# c1.pyplot(fig_array)
-
-
-## ---- user input for detection function ---- ##
-
-# max_distance = float(limits_xs[1])
-
-# c0, c1, c2 = st.columns((2, 6, 2))
-# function_type = c1.radio('Choose a detection function:', ['Half-normal', 'Hazard-rate'])
-
-# t = np.linspace(0, max_distance, 1000)
-
-# if (function_type == 'Half-normal'):
-#     sd_parameter = c1.slider('SD:', value=1.0, min_value=0.0, max_value = max_distance, step=0.01, format="%.3f")
-#     det_function = lambda x: (np.exp(-x**(2) / (2 * sd_parameter**2)))
-# else:
-#     #c1, c2 = st.columns(2)
-#     beta_parameter = c1.slider('Exponent (beta):', value=1.0, min_value=0.0, max_value = 10.0, step=0.01, format="%.3f")
-#     sd_parameter = c1.slider('SD:', value=1.0, min_value=0.0, max_value = max_distance, step=0.01, format="%.3f")
-#     det_function = lambda x: (1 - np.exp(-(x / sd_parameter)**(-beta_parameter)))
-
-# # plot detection function
-# fig_det_function = plotDetFunction(t, det_function)
-# #c0_det_fig, c1_det_fig, c2_det_fig = st.columns((3, 4, 3))
-# c1.pyplot(fig_det_function)
-
-
-## ---- decide on a new hydrophone location ---- ##
-    
-if "visibility" not in st.session_state:
-    st.session_state.disabled = False
-
-st.header('Add new units to the array:')
-
-st.write('Please choose location for new units, using metric coordinates relative to the base of the array:')
-
-#col1, col2 = st.columns(2)
-#col1.write('Metric Coordinates:')
-#col2.write('Latitude and Longitude:')
-
-
-initialize_x = [0.0, -3.0, 3.0]
-initialize_y = [10.5, 17.0, 17.0]
-
-c1, c2, c3 = st.columns(3)
-c2.write('Horizontal (km):')
-c3.write('Vertical (km):')
-
-for row in range(3):
-    c1, c2, c3 = st.columns(3)
-
-    #c1.write('Add additional unit?')
-    new_unit = c1.toggle('Add additional unit?', value=False, key='new_unit_' + str(row))#, label_visibility='collapsed')
-    x_new = c2.number_input('Horizontal (km):', min_value=-20.0, max_value=20.0, value=initialize_x[row], step=0.5, key='x_new_' + str(row), label_visibility='collapsed', disabled=not new_unit)
-    y_new = c3.number_input('Vertical (km):', min_value=0.0, max_value=20.0, value=initialize_y[row], step=0.5, key='y_new_' + str(row), label_visibility='collapsed', disabled=not new_unit)
-
-    if new_unit:
-        unit_xs = np.append(unit_xs, x_new)
-        unit_ys = np.append(unit_ys, y_new)
-
-
-# toggles
-# new_unit_1 = c1.toggle('Add new unit 1', value=False, key='new_unit_1')
-# new_unit_2 = c1.toggle('Add new unit 2', value=False, key='new_unit_2')
-# new_unit_3 = c1.toggle('Add new unit 3', value=False, key='new_unit_3')
-
-# # lat/lon
-# x_new_1 = c2.number_input('Horizontal (km):', min_value=-20.0, max_value=20.0, value=0.0, step=0.5, key='x_new_1')
-# x_new_2 = c2.number_input('Horizontal (km)', min_value=-20.0, max_value=20.0, value=-3.0, step=0.5, key='x_new_2')
-# x_new_3 = c2.number_input('Horizontal (km)', min_value=-20.0, max_value=20.0, value=3.0, step=0.5, key='x_new_3')
-
-# y_new_1 = c3.number_input('Vertical (km):', min_value=0.0, max_value=20.0, value=10.5, step=0.5, key='y_new_1')
-# y_new_2 = c3.number_input('Vertical (km):', min_value=0.0, max_value=20.0, value=17.0, step=0.5, key='y_new_2')
-# y_new_3 = c3.number_input('Vertical (km):', min_value=0.0, max_value=20.0, value=17.0, step=0.5, key='y_new_3')
-
-# metric
-# x_new_1 = col1.number_input('Horizontal (km):', min_value=-20.0, max_value=20.0, value=0.0, step=0.5, key='x_new_1')
-# x_new_2 = col1.number_input('Horizontal (km):', min_value=-20.0, max_value=20.0, value=0.0, step=0.5, key='x_new_2')
-# x_new_3 = col1.number_input('Horizontal (km):', min_value=-20.0, max_value=20.0, value=0.0, step=0.5, key='x_new_3')
-
-# y_new_1 = col2.number_input('Vertical (km):', min_value=0.0, max_value=20.0, value=10.5, step=0.5, key='y_new_1')
-# y_new_2 = col2.number_input('Vertical (km):', min_value=0.0, max_value=20.0, value=10.5, step=0.5, key='y_new_2')
-# y_new_3 = col2.number_input('Vertical (km):', min_value=0.0, max_value=20.0, value=10.5, step=0.5, key='y_new_3')
-
-
-#unit_xs = np.append(unit_xs, [x_new_1, x_new_2, x_new_3])
-#unit_ys = np.append(unit_ys, [y_new_1, y_new_2, y_new_3])
-
-positions, distances = precalculate(unit_xs, unit_ys, study_xs, study_ys)
-
-# unit_xs = np.append(unit_xs, x_new_2)
-# unit_ys = np.append(unit_ys, y_new_2)
-
-# unit_xs = np.append(unit_xs, x_new_2)
-# unit_ys = np.append(unit_ys, y_new_2)
-
-
-#else:
-    #lon_new = st.number_input('Longitude:', min_value=-157.2, max_value=-156.5, value=-157.0, step=0.001)
-    #lat_new = st.number_input('Latitude:', min_value=71.38, max_value=71.49, value=71.4, step=0.001)
-
-    # convert to metric
-
-
-fig_det_at_four_plus_units = plotProbabilityLandscape(unit_xs, unit_ys, None, study_xs, study_ys, limits_xs, limits_ys)
-c0, c1, c2 = st.columns((1, 6, 1))
-c1.pyplot(fig_det_at_four_plus_units)
-
-
-#else:
-#    lon_new = st.number_input('Longitude:', min_value=-157.2, max_value=-156.5, value=-157.0, step=0.001)
-#    lat_new = st.number_input('Latitude:', min_value=71.38, max_value=71.49, value=71.4, step=0.001)
-
-
-
-# col1, col2 = st.columns(2)
-
-# with col1:
-#     st.checkbox("Disable radio widget", key="disabled")
-
-# with col2:
-#     st.radio(
-#         "Set label visibility 👇",
-#         ["visible", "hidden", "collapsed"],
-#         key="visibility",
-#         disabled=st.session_state.disabled,
-#     )
-
-
-
-
-## ---- map ---- ##
-
 class FloatReader:
     def __init__(self, filename):
         self.f = open(filename, "rb")
@@ -470,11 +270,11 @@ class FloatReader:
         return np.fromfile(self.f, dtype=np.float32, count=count, sep='')
 
 
-def rotateArray(x, y, theta, x_mean, y_mean):
+def rotateArray(x, y, theta):
     theta = theta * np.pi/180
     rotation = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
     output = rotation @ np.array([x, y])
-    return output[0] + x_mean, output[1] + y_mean
+    return output[0], output[1]
 
 @st.cache_data
 def loadMapData():
@@ -507,18 +307,14 @@ def loadMapData():
     return bathymetry, lons, lats, coast, perch_locations_metric, special_locations_metric, special_locations_names
 
 
-def drawMap(bathymetry, lons, lats, coast, perch_locations_metric, special_locations_metric, special_locations_names, x_array, y_array):
+def drawMap(bathymetry, lons, lats, coast, perch_lon, perch_lat, special_locations_metric, special_locations_names, x_array, y_array):
     fig, ax = plt.subplots(1, 1, figsize=(10, 7))
     contours = plt.contourf(lons, lats, np.flipud(bathymetry), levels = np.arange(-140, 9, 10), cmap='Blues', zorder=2)
-    plt.contour(lons, lats, np.flipud(bathymetry), levels = [-75], cmap='cool', zorder=3)
-    # plt.pcolormesh(np.flipud(data[data > 0]), levels = np.arange(0, 50, 10), c='k')
-    #plt.pcolormesh(np.flipud(data_ground))
-    plt.colorbar(contours)
-    plt.scatter(x_mean, y_mean, s=60, color='red', marker='*', zorder=8)
-
-    for i, point in enumerate(perch_locations_metric):
-        plt.scatter(point.x, point.y, s=20, color='orange', marker='*', zorder=10)
     
+    plt.contour(lons, lats, np.flipud(bathymetry), levels = [-75], cmap='cool', zorder=3)
+    plt.colorbar(contours)
+    plt.scatter(perch_lon, perch_lat, s=60, color='red', marker='*', zorder=8)
+
     for i, point in enumerate(special_locations_metric):
         plt.scatter(point.x, point.y, s=20, color='b', marker='D', zorder=10)
         plt.text(point.x, point.y - 1.2, special_locations_names[i], color='b', fontsize=9, zorder=10)
@@ -531,34 +327,150 @@ def drawMap(bathymetry, lons, lats, coast, perch_locations_metric, special_locat
     ax.set_ylabel('Projected Latitude (km)')
     return fig
 
-st.header('Map Visualization:')
+
+## ======================================================================================================================== ##
+
+st.title('Bowhead Census - Revisiting Array Design')
+
+empirical_sds = {'Ice-cover': {60: 17, 70: 12, 80: 4.5},
+                 'Open-water': {60: 90, 70: 54, 80: 28}}
+
+array_choice = 'Current Configuration'
+array_spacing = 6.5
+array_offset = 4.0
+
+grid_resolution = 60
+grid_limits = 30
+
+x_center = 580.68
+y_center = 7921.20
+rotation = -28
+
+# prepare map information
+bathymetry, lons, lats, coast, perch_locations_metric, special_locations_metric, special_locations_names = loadMapData()
+
+geometries = {'Current Configuration': lambda d, z: (np.array([-(1 + np.sqrt(3)/2) * d, -d, -d, 0, d, d, (1 + np.sqrt(3)/2) * d]), np.array([z + d/2, z, d + z, z, z, d + z, z + d/2]))}
+unit_xs = geometries[array_choice](array_spacing, array_offset)[0]
+unit_ys = geometries[array_choice](array_spacing, array_offset)[1]
+
+limits_xs = [-grid_limits, grid_limits]
+limits_ys = [0, grid_limits]
+study_xs = np.linspace(limits_xs[0], limits_xs[1], grid_resolution)
+study_ys = np.linspace(limits_ys[0], limits_ys[1], grid_resolution)
+
+with st.sidebar:
+    st.subheader('Detection Function Parameters')
+
+    st.markdown('The detection functions below are estimated by reference to *"The influence of sea ice on the detection of bowhead whale calls"* by Jones, Joshua M., et al, published in Scientific Reports (2022).')
+
+    st.markdown('Please use the slider below to set the **standard deviation** of the half-normal detection function indicated by the black curve.')
+
+    t = np.linspace(0, 40.0, 1000)
+    sd_parameter = st.slider('SD:', value=10.0, min_value=0.0, max_value = 60.0, step=0.5, format="%.1f")
+    det_function = lambda x: halfNormal(x, sd_parameter)
+
+    fig_det_function = plotDetFunction(t, det_function, empirical_sds)
+    st.pyplot(fig_det_function)
+
+
+## ======================================================================================================================== ##
+
+st.subheader('Specify location for the perch:')
+
+c1, c2 = st.columns(2)
+c1.write('Longitude (degrees):')
+c2.write('Latitude (degrees):')
+perch_lon = c1.number_input('Longitude:', min_value=-158.0, max_value=-156.0, value=-156.5930371473, step=0.001, format="%.5f", label_visibility='collapsed')
+perch_lat = c2.number_input('Latitude:', min_value=71.0, max_value=72.0, value=71.39566096, step=0.001, format="%.5f", label_visibility='collapsed')
+
+# convert to metric
+perch_gpd = gpd.points_from_xy([perch_lon], [perch_lat], crs="EPSG:4326")
+perch_metric = perch_gpd.to_crs(coast.crs)
+
+## ======================================================================================================================== ##
+
+st.subheader('Specify location for the new units:')
+
+c1, c2, c3 = st.columns(3)
+c2.write('Longitude (degrees):')
+c3.write('Latitude (degrees):')
+
+new_lons = []
+new_lats = []
+for row in range(3):
+    c1, c2, c3 = st.columns(3)
+
+    new_unit = c1.toggle('Add additional unit?', value=False, key='new_unit_' + str(row))#, label_visibility='collapsed')
+    lon_new = c2.number_input('Longitude:', min_value=-158.0, max_value=-156.0, value=-156.86470, step=0.001, format="%.5f", key='x_new_' + str(row), label_visibility='collapsed', disabled=not new_unit)
+    lat_new = c3.number_input('Latitude:', min_value=71.0, max_value=72.0, value=71.46390, step=0.001, format="%.5f", key='y_new_' + str(row), label_visibility='collapsed', disabled=not new_unit)
+
+    if new_unit:
+        new_lons.append(lon_new)
+        new_lats.append(lat_new)
+
+if len(new_lons) > 0:
+    # need to convert from lat/lon to metric units
+    new_locations_gpd = gpd.points_from_xy(new_lons, new_lats, crs="EPSG:4326")
+    new_locations_metric = new_locations_gpd.to_crs(coast.crs)
+
+    # next, subtract perch and rotate back
+    for i in range(len(new_lons)):
+        new_loc = [new_locations_metric[i].x, new_locations_metric[i].y]
+        new_loc = [new_loc[0] - x_center, new_loc[1] - y_center]
+        unit_xs_new, unit_ys_new = rotateArray(new_loc[0], new_loc[1], -rotation)
+
+        # add to list of units
+        unit_xs = np.append(unit_xs, unit_xs_new)
+        unit_ys = np.append(unit_ys, unit_ys_new)
+
+
+# translate and rotate array
+x_array, y_array = rotateArray(unit_xs, unit_ys, rotation)
+x_array += x_center
+y_array += y_center
+
+
+## ======================================================================================================================== ##
+
+st.subheader('Map Visualization:')
 
 st.markdown('This map shows the prospective array overlaid on the [bathymetry](https://arcticdata.io/catalog/view/doi:10.5065/D6QZ2822) \
             of Point Barrow. The orange stars show prior perch locations with the mean location represented by the large red star, and \
             the bright cyan curve indicates the 75m isoline.')
 
-# prepare map information
-bathymetry, lons, lats, coast, perch_locations_metric, special_locations_metric, special_locations_names = loadMapData()
-
-# mean longitude/latitude
-x_mean = np.mean([point.x for point in perch_locations_metric])
-y_mean = np.mean([point.y for point in perch_locations_metric])
-
-# user parameters for map
-c1, c2, c3 = st.columns(3)
-x_center = 580.68 #c1.number_input('Center longitude (km):', min_value=570.0, max_value=590.0, value=580.68, step=1.0)
-y_center = 7921.20 #c2.number_input('Center latitude (km):', min_value=7910.0, max_value=7930.0, value=7921.20, step=1.0)
-rotation = -28 #c3.number_input('Rotation (degrees):', min_value=-90, max_value=90, step=5, value=-28)
-
-# translate and rotate array
-x_array, y_array = rotateArray(unit_xs, unit_ys, rotation, x_center, y_center)
 
 # plot map
-fig_map = drawMap(bathymetry, lons, lats, coast, perch_locations_metric, special_locations_metric, special_locations_names, x_array, y_array)
+fig_map = drawMap(bathymetry, lons, lats, coast, perch_metric[0].x, perch_metric[0].y, special_locations_metric, special_locations_names, x_array, y_array)
 st.pyplot(fig_map)
 
 
-st.header('Coordinates:')
+## ======================================================================================================================== ##
+
+st.subheader('Metric Visualization:')
+
+perch_x, perch_y = rotateArray(perch_metric[0].x - x_center, perch_metric[0].y - y_center, -rotation)
+
+# convert perch to basic metric coordinates
+unit_xs = [x - perch_x for x in unit_xs]
+unit_ys = [y - perch_y for y in unit_ys]
+
+positions, distances = precalculate(unit_xs, unit_ys, study_xs, study_ys)
+
+fig_det_at_four_plus_units = plotProbabilityLandscape(unit_xs, unit_ys, None, study_xs, study_ys, limits_xs, limits_ys)
+c0, c1, c2 = st.columns((1, 6, 1))
+c1.pyplot(fig_det_at_four_plus_units)
+
+# afterwards, calculate probability landscapes and plot
+# positions, distances = precalculate(unit_xs, unit_ys, study_xs, study_ys)
+
+# fig_det_at_four_plus_units = plotProbabilityLandscape(unit_xs, unit_ys, None, study_xs, study_ys, limits_xs, limits_ys)
+# c0, c1, c2 = st.columns((1, 6, 1))
+# c1.pyplot(fig_det_at_four_plus_units)
+
+
+## ======================================================================================================================== ##
+
+st.subheader('Coordinates:')
 
 proposed_array_metric = gpd.points_from_xy(x_array, y_array, crs=coast.crs)
 proposed_array_epsg = proposed_array_metric.to_crs("EPSG:4326")
@@ -587,9 +499,9 @@ c2.write('Prospective new units:')
 c2.dataframe(array_new)
 
 
-## ---- plots and calculations ---- ##
+## ======================================================================================================================== ##
 
-st.header('Probability of Detection Visualization:')
+st.subheader('Probability of Detection Visualization:')
 
 # calculate probabilities
 probs = calculateProbs(det_function, distances)
@@ -633,11 +545,9 @@ with st.expander('Probability that a call is detected at exactly three units:'):
     c1.pyplot(fig_det_at_three_units)
 
 
+## ======================================================================================================================== ##
 
-
-## ---- spatial error ---- ##
-
-st.header('Evaluating Localization Performance:')
+st.subheader('Evaluating Localization Performance:')
 
 st.markdown('We apply the likelihood-surface localization algorithm, as described in [*Methods for tracking multiple marine mammals \
             with wide-baseline passive acoustic arrays* (Nosal 2013)](https://pubs.aip.org/asa/jasa/article-abstract/134/3/2383/811358/Methods-for-tracking-multiple-marine-mammals-with).\
@@ -682,19 +592,3 @@ if submitted:
     fig_weights = plotErrorMap(unit_xs, unit_ys, stats_metric/success_counts, localizer, limits_xs, limits_ys, vmax=1, title='Of the localizations, what proportion correctly identifies if y < or > 4km?')
     c0, c1, c2 = st.columns((1, 6, 1))
     c1.pyplot(fig_weights)
-
-
-# the estimator that Geof wants...
-
-# for each location in the strip of -4 < x < 4
-# if the location is outside of 4km: what proportion of the Monte-Carloed localization estimates result in distances >4km? multiply this by the number of estimates used to compute it
-# if the location is inside of 4km: what proportion of the Monte-Carloed localization estimates result in distances <4km? multiply this by the number of estimates used to compute it
-# no location: 0's
-# make a histogram of these values
-
-
-# Hi Geof! I implemented a modified computational version of your weights metric. For the localization metrics, I repeatedly sample temporal error and then run TDoA localization.
-# If localization does not give a feasible result, it is recorded as w=0. If localization incorrectly identifies d<4km or d>4km, it is also recorded as w=0. And if localization
-# correctly identifies d<4km or d>4km, it is recorded as w=1.
-# I then calculate the mean weight for each grid cell, plot these values over space, and include a histogram of these values. That way, you can see the regions of uncertainty.
-# Does this sound right to you, and address your description? If I understand correctly, I think this should be the empirical version of the weights (scaled up by 2)?
